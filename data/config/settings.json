@@ -1,0 +1,14 @@
+{
+    "ap_enable":false,
+    "ap_ssid":"ESP Door",
+    "ap_password":"",
+    "sta_enable":true,
+    "sta_ssid":"MBBS-HOSTEL",
+    "sta_password":"",
+    "lockdown_enable":true,
+    "mdns_enable":true,
+    "mdns_name":"esp_door",
+    "ota_enable":true,
+    "max_attempts":3,
+    "lockdown_duration":5
+}
