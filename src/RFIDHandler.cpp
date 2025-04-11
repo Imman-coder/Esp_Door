@@ -25,10 +25,9 @@
 bool lastResetState = false; // Variable to store the last state of the reset pin
 long lastResetTime = 0;
 
-String *splitStringByComma(const String &input, int &count);
-void registerNewTag(String);
-void unregisterTag(String);
-bool isValidTag2(String);
+void removeTagFromUser(String tag);
+void addTagToUser(String tag);
+bool isTagRegistered(String tag);
 
 MFRC522DriverPinSimple ss_pin(RFID_SDA);
 SPIClass &spiClass = SPI;
@@ -84,10 +83,10 @@ void loopRFID()
     {
         if (keypadMode == NFC_SCAN_TO_DELETE)
         {
-            if (isValidTag2(uid))
+            if (isTagRegistered(uid))
             {
                 // unregister card logic
-                unregisterTag(uid);
+                removeTagFromUser(uid);
                 lcdPrintTemporary("Card UnRegistered");
                 Serial.printf("Card Unregistered: %s\n",uid);
             }
@@ -100,10 +99,10 @@ void loopRFID()
         }
         else
         {
-            if (!isValidTag2(uid))
+            if (!isTagRegistered(uid))
             {
                 // register card logic
-                registerNewTag(uid);
+                addTagToUser(uid);
                 Serial.printf("Registered new card: %s\n",uid);
                 lcdPrintTemporary("New Card ","Registered");
             }
@@ -121,7 +120,7 @@ void loopRFID()
     }
 
     // valid logic
-    if (isValidTag2(uid))
+    if (isTagRegistered(uid))
     {
         Serial.println("Valid Tag Detected");
         clearPassword();
@@ -136,108 +135,54 @@ void loopRFID()
     }
 }
 
-// bool isValidTag(String tag)
-// {
-//     String saved_tags = userConfig.getString(CONFIG_TAGS);
-//     int count = 0;
-//     String *tags = splitStringByComma(saved_tags, count);
-//     for (int i = 0; i < count; i++)
-//     {
-//         if (tag == tags[i])
-//         {
-//             return true;
-//         }
-//     }
-//     return false;
-// }
+bool isTagRegistered(String tag) {
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
 
-JsonDocument getSavedTagsDoc()
-{
-    JsonDocument doc;
-    String tags = userConfig.getString(CONFIG_TAGS);
-    DeserializationError error = deserializeJson(doc, tags);
-    if (error)
-    {
-        Serial.print("deserializeJson() failed: ");
-        Serial.println(error.c_str());
-        return JsonDocument();
-    }
-    return doc;
-}
-
-void unregisterTag(String tag)
-{
-    JsonDocument doc = getSavedTagsDoc();
-    JsonArray saved_tags = doc.as<JsonArray>();
-    for (size_t i = 0; i < saved_tags.size(); i++)
-    {
-        if (saved_tags[i] == tag)
-        {
-            saved_tags.remove(i);
-            break;
+    for (JsonObject user : users) {
+        JsonArray tags = user["tags"];
+        for (String t : tags) {
+            if (t == tag) {
+                userId = user["username"].as<String>();
+                return true;
+            }
         }
     }
-    String s;
-    serializeJson(saved_tags, s);
-    userConfig.putString(CONFIG_TAGS, s);
-}
-
-void registerNewTag(String tag)
-{
-    JsonDocument doc = getSavedTagsDoc();
-    JsonArray saved_tags =  doc.as<JsonArray>();
-    saved_tags.add(tag);
-    String s;
-    serializeJson(saved_tags, s);
-    userConfig.putString(CONFIG_TAGS, s);
-}
-
-bool isValidTag2(String tag)
-{
-    JsonDocument doc = getSavedTagsDoc();
-    JsonArray saved_tags = doc.as<JsonArray>();
-
-    for (String s : saved_tags)
-    {
-        if (s == tag)
-        {
-            return true;
-        }
-    }
-
     return false;
 }
 
-String *splitStringByComma(const String &input, int &count)
-{
-    // Count the commas to determine the number of tokens.
-    count = 0;
-    for (unsigned int i = 0; i < input.length(); i++)
-    {
-        if (input.charAt(i) == ',')
-        {
-            count++;
+
+void addTagToUser(String tag) {
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
+
+    for (JsonObject user : users) {
+        if (user["username"] == userId) {
+            JsonArray tags = user["tags"];
+            tags.add(tag);
+            break;
         }
     }
-    // There is one more token than the number of commas.
-    count = count + 1;
 
-    // Dynamically allocate an array of String objects.
-    String *tokens = new String[count];
+    saveUsers(doc);
+}
 
-    int index = 0;
-    int start = 0;
-    int pos = input.indexOf(',', start);
+void removeTagFromUser(String tag) {
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
 
-    // Extract tokens separated by commas.
-    while (pos != -1)
-    {
-        tokens[index++] = input.substring(start, pos);
-        start = pos + 1;
-        pos = input.indexOf(',', start);
+    for (JsonObject user : users) {
+        if (user["username"] == userId) {
+            JsonArray tags = user["tags"];
+            for (size_t i = 0; i < tags.size(); i++) {
+                if (tags[i] == tag) {
+                    tags.remove(i);
+                    break;
+                }
+            }
+            break;
+        }
     }
-    // Add the last token.
-    tokens[index] = input.substring(start);
 
-    return tokens;
+    saveUsers(doc);
 }

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Preferences.h>
+#include <ArduinoJson.h>
 
+#define CONFIG_USERS "users"
 #define CONFIG_PIN "pin"
 #define CONFIG_ENABLE_NFC "enable_nfc"
 #define CONFIG_TAGS "tags"
@@ -18,11 +20,13 @@
 #define CONFIG_MAX_ATTEMPTS "max_attempts"
 #define CONFIG_LOCKDOWN_DURATION "lockdown_duration"
 
-
-extern Preferences userConfig;
+extern Preferences userPrefs;
 extern Preferences globalConfig;
 
-
 void setupConfigStorage();
+
+JsonDocument loadUsers();
+
+void saveUsers(const JsonDocument &doc);
 
 void nvs_reset();

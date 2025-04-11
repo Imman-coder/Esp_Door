@@ -4,6 +4,8 @@
 #include "ConfigStorage.h"
 #include "BuzzerHandler.h"
 
+#include "ArduinoJson.h"
+
 // Keypad definations
 #define ROWS 4
 #define COLS 4
@@ -20,10 +22,19 @@ String lastEntered = "";
 String entered = "";
 SetupMode keypadMode = NORMAL;
 
+const unsigned long multiTapDelay = 1000;
+unsigned long lastKeyPressTime = 0;
+char currentKey = '\0';
+int pressCount = 0;
+String enteredName = "";
+
 void keypadEventHandler(KeypadEvent key);
+bool changeUserPassword(String newPassword);
 bool verifyPassword(String password);
 String maskPassword(String password);
 String reverseString(String str);
+void makeNameWithKey(char key);
+bool addUser(String username, String password);
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
@@ -49,13 +60,21 @@ void keypadEventHandler(KeypadEvent key)
 
         if (key == '#')
         {
-            if (keypadMode == PASSWORD_RESET)
+            if (keypadMode == PASSWORD_CHANGE)
             {
-                userConfig.putString(CONFIG_PIN, entered);
+                changeUserPassword(entered);
                 keypadMode = NORMAL;
-                Serial.printf("keypadMode: %s\n", keypadModeToString());
                 entered = "";
                 lcdPrintTemporary("Password Changed", "");
+                return;
+            }
+
+            if (keypadMode == ADD_PASSWORD)
+            {
+                addUser(userId, entered);
+                keypadMode = NORMAL;
+                entered = "";
+                lcdPrintTemporary("New User", "Registered");
                 return;
             }
 
@@ -63,15 +82,21 @@ void keypadEventHandler(KeypadEvent key)
             {
                 lcdPrint("Scan new Card");
                 keypadMode = NFC_SCAN_TO_REGISTER;
-                Serial.printf("keypadMode: %s\n", keypadModeToString());
                 return;
             }
 
             if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
             {
                 keypadMode = NORMAL;
-                Serial.printf("keypadMode: %s\n", keypadModeToString());
                 lcdPrintTemporary("", "", 1);
+                return;
+            }
+
+            if (keypadMode == ADD_USERNAME)
+            {
+                userId = enteredName;
+                keypadMode = PASSWORD_CHANGE;
+                lcdPrint("Enter new", "Password");
                 return;
             }
 
@@ -96,10 +121,9 @@ void keypadEventHandler(KeypadEvent key)
             buzzShort();
             lastEntered = entered;
 
-            if (keypadMode == PASSWORD_RESET)
+            if (keypadMode == PASSWORD_CHANGE)
             {
                 keypadMode = NORMAL;
-                Serial.printf("keypadMode: %s\n", keypadModeToString());
                 entered = "";
                 lcdPrintTemporary("Password Reset", "Cancelled");
                 return;
@@ -109,16 +133,19 @@ void keypadEventHandler(KeypadEvent key)
             {
                 lcdPrint("Scan Card to", "Unregister");
                 keypadMode = NFC_SCAN_TO_DELETE;
-                Serial.printf("del - keypadMode: %s\n", keypadModeToString());
                 return;
             }
 
             if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
             {
                 keypadMode = NORMAL;
-                Serial.printf("keypadMode: %s\n", keypadModeToString());
                 lcdPrintTemporary("", "", 1);
                 return;
+            }
+
+            if (keypadMode == ADD_USERNAME)
+            {
+                enteredName = enteredName.substring(0, enteredName.length() - 1);
             }
 
             if (!isDoorLocked && entered.length() > 0)
@@ -142,20 +169,25 @@ void keypadEventHandler(KeypadEvent key)
         }
         if (key == 'C')
         {
-            // setBacklight(false);
             toggleBacklight();
             return;
         }
         if (key == 'D')
         {
-            // setBacklight(true);
+            return;
+        }
+
+        if (keypadMode == ADD_USERNAME)
+        {
+            makeNameWithKey(key);
+            lcdPrint("New User Name:", enteredName);
             return;
         }
 
         entered += key;
-        if (keypadMode == PASSWORD_RESET)
+        if (keypadMode == PASSWORD_CHANGE)
         {
-            lcdPrint(maskPassword(entered));
+            lcdPrint((entered));
         }
         else
         {
@@ -180,25 +212,25 @@ void keypadEventHandler(KeypadEvent key)
             ESP.restart();
             Serial.println("Restarting...");
         }
-        else if (key == 'A' && isDoorOpened)
+        else if (key == 'A' && isDoorOpened && !isDoorLocked)
         {
             lcdPrint("Enter new", "Password");
-            keypadMode = PASSWORD_RESET;
-            Serial.printf("keypadMode: %s\n", keypadModeToString());
+            keypadMode = PASSWORD_CHANGE;
             entered = "";
         }
-        else if (key == 'B' && isDoorOpened)
+        else if (key == 'B' && isDoorOpened && !isDoorLocked)
         {
             lcdPrint("Card Options:", "(*)Remove (#)Add");
             keypadMode = NFC_OPTIONS;
-            Serial.printf("keypadMode: %s\n", keypadModeToString());
         }
-        else if (key == 'C')
+        else if (key == 'C' && isDoorOpened && !isDoorLocked)
         {
             if (verifyPassword(reverseString(entered)))
             {
-                Serial.printf("Tags: %s",userConfig.getString(CONFIG_TAGS));
+                Serial.printf("Tags: %s", userPrefs.getString(CONFIG_USERS));
             }
+
+            lcdPrint("New User Name:");
         }
         break;
     }
@@ -211,18 +243,144 @@ void clearPassword()
 
 bool verifyPassword(String password)
 {
-    String storedPassword = userConfig.getString(CONFIG_PIN, "");
-
-    // Compare the entered password with the stored password
-    if (password == storedPassword)
+    JsonDocument usersDoc = loadUsers();
+    JsonArray users = usersDoc.as<JsonArray>();
+    if (users.size() == 0 && password == "1234")
     {
+        userId = "Admin";
         return true;
+    }
+    for (JsonObject user : users)
+    {
+        if (user["password"] == password)
+        {
+            userId = user["username"].as<String>();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/*------------------------------------User Manipulation methods--------------------------------*/
+
+bool changeUserPassword(String newPassword)
+{
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
+
+    for (JsonObject user : users)
+    {
+        if (user["username"] == userId)
+        {
+            user["password"] = newPassword;
+            saveUsers(doc);
+            return true;
+        }
+    }
+
+    return false; // user not found
+}
+
+bool addUser(String username, String password)
+{
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
+
+    // Check if the user already exists
+    for (JsonObject user : users)
+    {
+        if (user["username"] == username)
+        {
+            return false;
+        }
+    }
+
+    JsonObject newUser = users.add<JsonObject>();
+    newUser["username"] = username;
+    newUser["password"] = password;
+    newUser["tags"] = JsonArray();
+
+    saveUsers(doc);
+    return true;
+}
+
+/*----------------------------------T9 Name Entry----------------------------------------*/
+
+// Function to map a key to its corresponding letters
+String getKeyMapping(char key)
+{
+    switch (key)
+    {
+    case '2':
+        return "ABC2";
+    case '3':
+        return "DEF3";
+    case '4':
+        return "GHI4";
+    case '5':
+        return "JKL5";
+    case '6':
+        return "MNO6";
+    case '7':
+        return "PQRS7";
+    case '8':
+        return "TUV8";
+    case '9':
+        return "WXYZ9";
+    case '0':
+        return " 0";
+    default:
+        return "";
+    }
+}
+
+void appendCurrentLetter()
+{
+    String mapping = getKeyMapping(currentKey);
+    if (mapping.length() > 0)
+    {
+        int index = (pressCount - 1) % mapping.length();
+        char letter = mapping.charAt(index);
+        enteredName += letter;
     }
     else
     {
-        return false;
+        enteredName += currentKey;
+    }
+    Serial.print("Current text: ");
+    Serial.println(enteredName);
+}
+
+void makeNameWithKey(char key)
+{
+    if (key != NO_KEY)
+    {
+        if (key == currentKey)
+        {
+            pressCount++;
+        }
+        else
+        {
+            if (currentKey != '\0')
+            {
+                appendCurrentLetter();
+            }
+            currentKey = key;
+            pressCount = 1;
+        }
+        lastKeyPressTime = millis();
+    }
+
+    if (currentKey != '\0' && (millis() - lastKeyPressTime > multiTapDelay))
+    {
+        appendCurrentLetter();
+        currentKey = '\0';
+        pressCount = 0;
     }
 }
+
+/*---------------------UTILITY FUNCTIONS----------------------*/
 
 String maskPassword(String password)
 {
@@ -240,7 +398,7 @@ String keypadModeToString()
     {
     case NORMAL:
         return "NORMAL";
-    case PASSWORD_RESET:
+    case PASSWORD_CHANGE:
         return "PASSWORD_RESET";
     case NFC_OPTIONS:
         return "NFC_OPTIONS";

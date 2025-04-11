@@ -2,20 +2,14 @@
 #include "WiFiHandler.h"
 #include <nvs_flash.h>
 
-Preferences userConfig;
+Preferences userPrefs;
 Preferences globalConfig;
 
 void setupConfigStorage()
 {
-    userConfig.begin("user");
+    userPrefs.begin("user");
     globalConfig.begin("global");
 
-    if (!userConfig.isKey(CONFIG_PIN))
-    {
-        userConfig.putString(CONFIG_PIN, DEFAULT_PASSWORD);
-        userConfig.putBool(CONFIG_ENABLE_NFC, DEFAULT_ENABLE_NFC);
-        userConfig.putString(CONFIG_TAGS, "[\"21F21902\"]");
-    }
     if (!globalConfig.isKey(CONFIG_STA_ENABLE))
     {
         globalConfig.putBool(CONFIG_STA_ENABLE, DEFAULT_STA_ENABLE);
@@ -29,6 +23,19 @@ void setupConfigStorage()
     }
 
     Serial.println("Config storage initialized");
+}
+
+JsonDocument loadUsers() {
+    String json = userPrefs.getString("users", "[]");
+    JsonDocument doc;
+    deserializeJson(doc, json);
+    return doc;
+}
+
+void saveUsers(const JsonDocument& doc) {
+    String out;
+    serializeJson(doc, out);
+    userPrefs.putString("users", out);
 }
 
 void nvs_reset()

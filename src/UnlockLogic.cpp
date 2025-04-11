@@ -17,6 +17,16 @@ bool isDoorLocked = true;
 
 bool lastTickReset = true;
 
+String userId = "";
+
+void setUserId(String s){
+    userId = s;
+}
+
+String getUserId(){
+    return userId;
+}
+
 void setupUnlockLogic()
 {
     pinMode(SOLENOID_PIN, OUTPUT);
@@ -67,7 +77,7 @@ void unlockDoor()
     lastUnlockTime = millis();
     isDoorLocked = false;
     Serial.println("Lock is unlocked");
-    lcdPrint("Door Unlocked", "Door is open");
+    lcdPrint("Welcome, ",userId);
     lastTickReset = false;
     for (int i = 0; i < 5; i++)
     {
@@ -94,7 +104,6 @@ void loopUnlock()
         // rfid.PCD_SoftPowerUp();
         if( !lastTickReset ){
             rfid.PCD_Init();
-            Serial.println("Lock is locked, RFID is powered down");
             lastTickReset = true;
         }
     }

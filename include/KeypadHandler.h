@@ -6,10 +6,15 @@
 
 enum SetupMode  {
     NORMAL,
-    PASSWORD_RESET,
+    
+    PASSWORD_CHANGE,
+    
     NFC_OPTIONS,
     NFC_SCAN_TO_REGISTER,
-    NFC_SCAN_TO_DELETE
+    NFC_SCAN_TO_DELETE,
+    
+    ADD_USERNAME,
+    ADD_PASSWORD
 };
 
 extern SetupMode keypadMode;
