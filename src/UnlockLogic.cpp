@@ -19,11 +19,13 @@ bool lastTickReset = true;
 
 String userId = "";
 
-void setUserId(String s){
+void setUserId(String s)
+{
     userId = s;
 }
 
-String getUserId(){
+String getUserId()
+{
     return userId;
 }
 
@@ -77,7 +79,7 @@ void unlockDoor()
     lastUnlockTime = millis();
     isDoorLocked = false;
     Serial.println("Lock is unlocked");
-    lcdPrint("Welcome, ",userId);
+    lcdPrint(MSG_DOOR_UNLOCKED(userId));
     lastTickReset = false;
     for (int i = 0; i < 5; i++)
     {
@@ -102,7 +104,8 @@ void loopUnlock()
 
         // rfid.PCD_SoftPowerDown();
         // rfid.PCD_SoftPowerUp();
-        if( !lastTickReset ){
+        if (!lastTickReset)
+        {
             rfid.PCD_Init();
             lastTickReset = true;
         }

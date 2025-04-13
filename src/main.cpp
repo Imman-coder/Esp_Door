@@ -23,7 +23,9 @@ void setup()
   startWebserver();
   setupBuzzer();
   setupUnlockLogic();
-  Serial.println("Version 2.62");
+  Serial.println("Version 2.82");
+  
+  CheckFirstRun();
 }
 
 void loop()

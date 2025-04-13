@@ -22,11 +22,12 @@ String lastEntered = "";
 String entered = "";
 SetupMode keypadMode = NORMAL;
 
-const unsigned long multiTapDelay = 1000;
-unsigned long lastKeyPressTime = 0;
-char currentKey = '\0';
-int pressCount = 0;
 String enteredName = "";
+String selectedUser = "";
+
+bool isSelectedUserFirst = true;
+bool isSelecteUserLast = false;
+int selectedUserIndex = -1;
 
 void keypadEventHandler(KeypadEvent key);
 bool changeUserPassword(String newPassword);
@@ -35,6 +36,13 @@ String maskPassword(String password);
 String reverseString(String str);
 void makeNameWithKey(char key);
 bool addUser(String username, String password);
+bool removeUser(String usernameToRemove);
+void deleteLastChar();
+void clearName();
+void setUserAdmin(bool isAdmin);
+void getPreviousUser();
+void getNextUser();
+bool isUserAdmin();
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
@@ -52,188 +60,606 @@ void loopKeypad()
     keypad.getKey();
 }
 
+void handleAcceptKeypress()
+{
+    bool success;
+    switch (keypadMode)
+    {
+    case NFC_SCAN_TO_DELETE:
+        break;
+    case NFC_SCAN_TO_REGISTER:
+        break;
+
+    case PASSWORD_CHANGE:
+        success = changeUserPassword(entered);
+        keypadMode = NORMAL;
+        entered = "";
+        lcdPrint("");
+        if (success)
+            lcdPrintTemporary(MSG_SUCCESS_PASSWORD_CHANGE);
+        else
+            lcdPrintTemporary(MSG_FAIL_PASSWORD_CHANGE);
+        break;
+
+    case NFC_OPTIONS:
+        lcdPrintImportant(MSG_SCAN_NEW_NFC);
+        keypadMode = NFC_SCAN_TO_REGISTER;
+        break;
+
+    case FIRST_ADD_USERNAME:
+        break;
+
+    case FIRST_ADD_PASSWORD:
+        break;
+
+    case USER_OPTIONS:
+        keypadMode = USER_NEW_USERNAME;
+        lcdPrintImportant(MSG_ENTER_USERNAME);
+        break;
+
+    case USER_DELETE:
+        keypadMode = NORMAL;
+        success = removeUser(selectedUser);
+        lcdPrint("");
+        if (success)
+            lcdPrintTemporary(MSG_SUCCESS_USER_DELETE);
+        else
+            lcdPrintTemporary(MSG_FAIL_USER_DELETE);
+        break;
+
+    case USER_NEW_USERNAME:
+        userId = enteredName;
+        clearName();
+        keypadMode = USER_NEW_PASSWORD;
+        lcdPrintImportant(MSG_ENTER_NEW_PASSWORD);
+        break;
+
+    case USER_NEW_PASSWORD:
+        success = addUser(userId, entered);
+        Serial.printf("New User: %s, %s, %s\n", userId, entered, success ? "Success" : "Failed");
+        keypadMode = NORMAL;
+        entered = "";
+        lcdPrint("");
+        if (success)
+            lcdPrintTemporary(MSG_SUCCESS_USER_CREATE);
+        else
+            lcdPrintTemporary(MSG_FAIL_USER_CREATE);
+        break;
+
+    case USER_ADMIN_OPTION:
+        setUserAdmin(true);
+        keypadMode = NORMAL;
+        lcdPrint("");
+        lcdPrintHome();
+        break;
+
+    case NORMAL:
+        // Check if password is correct
+        if (verifyPassword(entered))
+        {
+            Serial.println("Password correct");
+            unlockDoor();
+            buzzSuccess();
+        }
+        else
+        {
+            Serial.println("Password incorrect");
+            lcdPrintTemporary(MSG_INVALID_PASSWORD);
+            buzzError();
+        }
+        entered = "";
+        break;
+    }
+
+    {
+
+        // if (keypadMode == PASSWORD_CHANGE)
+        // {
+        //     bool success = changeUserPassword(entered);
+        //     keypadMode = NORMAL;
+        //     entered = "";
+        //     lcdPrint("");
+        //     lcdPrintTemporary(success ? MSG_SUCCESS_PASSWORD_CHANGE : MSG_FAIL_PASSWORD_CHANGE);
+        //     return;
+        // }
+
+        // if (keypadMode == NFC_OPTIONS)
+        // {
+        //     lcdPrintImportant(MSG_SCAN_NEW_NFC);
+        //     keypadMode = NFC_SCAN_TO_REGISTER;
+        //     return;
+        // }
+
+        // if (keypadMode == USER_OPTIONS)
+        // {
+        //     keypadMode == USER_NEW_USERNAME;
+        //     lcdPrintImportant(MSG_ENTER_USERNAME);
+        //     return;
+        // }
+
+        // if (keypadMode == USER_DELETE)
+        // {
+        //     keypadMode = NORMAL;
+        //     bool success = removeUser(selectedUser);
+        //     lcdPrint("");
+        //     lcdPrintTemporary(success ? MSG_SUCCESS_USER_DELETE : MSG_FAIL_USER_DELETE);
+        //     return;
+        // }
+
+        // if (keypadMode == USER_NEW_USERNAME)
+        // {
+        //     userId = enteredName;
+        //     clearName();
+        //     keypadMode = USER_NEW_PASSWORD;
+        //     lcdPrintImportant(MSG_ENTER_NEW_PASSWORD);
+        //     return;
+        // }
+
+        // if (keypadMode == USER_NEW_PASSWORD)
+        // {
+        //     bool success = addUser(userId, entered);
+        //     Serial.printf("New User: %s, %s, %s\n", userId, entered, success ? "Success" : "Failed");
+        //     keypadMode = NORMAL;
+        //     entered = "";
+        //     lcdPrint("");
+        //     lcdPrintTemporary(success ? MSG_SUCCESS_USER_CREATE : MSG_FAIL_USER_CREATE);
+        //     return;
+        // }
+
+        // if (keypadMode == USER_ADMIN_OPTION)
+        // {
+        //     setUserAdmin(true);
+        //     keypadMode = NORMAL;
+        //     lcdPrint("");
+        //     lcdPrintHome();
+        //     return;
+        // }
+
+        // I don't need this ig.
+        // if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
+        // {
+        //     keypadMode = NORMAL;
+        //     lcdPrintHome();
+        //     return;
+        // }
+
+        // Password verification.
+        // if (verifyPassword(entered))
+        // {
+        //     Serial.println("Password correct");
+        //     unlockDoor();
+        //     buzzSuccess();
+        // }
+        // else
+        // {
+        //     Serial.println("Password incorrect");
+        //     lcdPrintTemporary(MSG_INVALID_PASSWORD);
+        //     buzzError();
+        // }
+        // entered = "";
+    }
+}
+
+void handleRejectKeypress()
+{
+    buzzShort();
+    lastEntered = entered;
+    int len;
+
+    switch (keypadMode)
+    {
+    case PASSWORD_CHANGE:
+        if (entered.length() == 0)
+        {
+            keypadMode = NORMAL;
+            lcdPrint("");
+            lcdPrintTemporary(MSG_CLEAR, MSG_CLEAR, 1);
+        }
+        else
+        {
+            entered = entered.substring(0, entered.length() - 1);
+        }
+        break;
+
+    case NFC_OPTIONS:
+
+        lcdPrintImportant(MSG_SCAN_OLD_NFC_TO_DELETE); // sus
+        keypadMode = NFC_SCAN_TO_DELETE;
+        break;
+
+    case NFC_SCAN_TO_REGISTER:
+
+        keypadMode = NORMAL;
+        lcdPrintHome();
+        break;
+
+    case NFC_SCAN_TO_DELETE:
+        keypadMode = NORMAL;
+        lcdPrintHome();
+        break;
+
+    case FIRST_ADD_USERNAME:
+        len = enteredName.length();
+        deleteLastChar();
+        lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
+        break;
+
+    case FIRST_ADD_PASSWORD:
+        if (entered.length() == 0 && keypadMode != FIRST_ADD_PASSWORD)
+        {
+            keypadMode = FIRST_ADD_USERNAME;
+            lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
+        }
+        else
+        {
+            entered = entered.substring(0, entered.length() - 1);
+            lcdPrintImportant(MSG_ENTERING_PASSWORD(entered));
+        }
+        break;
+
+    case USER_OPTIONS:
+        keypadMode = USER_DELETE;
+        lcdPrintImportant(MSG_SELECT_USER(userId)); // implementation needed.
+        break;
+
+    case USER_DELETE:
+        keypadMode = NORMAL;
+        lcdPrint("");
+        lcdPrintHome();
+        break;
+
+    case USER_NEW_USERNAME:
+        len = enteredName.length();
+        if (len == 0)
+        {
+            entered = "";
+            clearName();
+            keypadMode = NORMAL;
+            lcdPrintHome();
+            return;
+        }
+        deleteLastChar();
+        lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
+        break;
+
+    case USER_NEW_PASSWORD:
+        if (entered.length() == 0)
+        {
+            keypadMode = USER_NEW_USERNAME;
+            lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
+            lcdPrint("");
+        }
+        else
+        {
+            entered = entered.substring(0, entered.length() - 1);
+            lcdPrintImportant(MSG_ENTERING_PASSWORD(entered));
+        }
+        break;
+
+    case USER_ADMIN_OPTION:
+        keypadMode = NORMAL;
+        lcdPrint("");
+        lcdPrintHome();
+        break;
+
+    case NORMAL:
+        if (!isDoorLocked && entered.length() > 0)
+        {
+            lockDoor();
+        }
+        else
+        {
+            lcdPrintHome();
+        }
+        entered = "";
+        break;
+    }
+
+    {
+        // if (keypadMode == USER_OPTIONS)
+        // {
+        //     keypadMode = USER_DELETE;
+        //     lcdPrintImportant(MSG_SELECT_USER);
+        // }
+
+        // if (keypadMode == USER_ADMIN_OPTION)
+        // {
+        //     keypadMode = NORMAL;
+        //     lcdPrint("");
+        //     lcdPrintHome();
+        //     // msg
+        //     return;
+        // }
+
+        // if (keypadMode == USER_DELETE)
+        // {
+        //     keypadMode = NORMAL;
+        //     lcdPrint("");
+        //     lcdPrintHome();
+        //     return;
+        // }
+
+        // if (keypadMode == PASSWORD_CHANGE)
+        // {
+        //     if (entered.length() == 0)
+        //     {
+        //         keypadMode = NORMAL;
+        //         lcdPrint("");
+        //         lcdPrintTemporary(MSG_DISMISS_PASSWORD);
+        //     }
+        //     else
+        //     {
+        //         entered = entered.substring(0, entered.length() - 1);
+        //     }
+        //     return;
+        // }
+
+        // if (keypadMode == USER_NEW_PASSWORD)
+        // {
+        //     if (entered.length() == 0)
+        //     {
+        //         keypadMode = NORMAL;
+        //         lcdPrint("");
+        //     }
+        //     else
+        //     {
+        //         entered = entered.substring(0, entered.length() - 1);
+        //     }
+        //     return;
+        // }
+
+        // if (keypadMode == FIRST_ADD_PASSWORD)
+        // {
+        //     if (entered.length() == 0 && keypadMode != FIRST_ADD_PASSWORD)
+        //     {
+        //         keypadMode = NORMAL;
+        //         // Send to Username entry
+        //     }
+        //     else
+        //     {
+        //         entered = entered.substring(0, entered.length() - 1);
+        //     }
+        //     return;
+        // }
+
+        // if (keypadMode == NFC_OPTIONS)
+        // {
+        //     lcdPrintImportant(MSG_SCAN_OLD_NFC_TO_DELETE);
+        //     keypadMode = NFC_SCAN_TO_DELETE;
+        //     return;
+        // }
+
+        // if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
+        // {
+        //     keypadMode = NORMAL;
+        //     lcdPrintHome();
+        //     return;
+        // }
+
+        // if (keypadMode == USER_NEW_USERNAME)
+        // {
+        //     int len = enteredName.length();
+        //     if (len == 0)
+        //     {
+        //         entered = "";
+        //         clearName();
+        //         keypadMode = NORMAL;
+        //         lcdPrintHome();
+        //         return;
+        //     }
+        //     deleteLastChar();
+        //     lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
+        //     return;
+        // }
+
+        // if (keypadMode == FIRST_ADD_USERNAME)
+        // {
+        //     int len = enteredName.length();
+        //     deleteLastChar();
+        //     lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
+        //     return;
+        // }
+
+        // if (!isDoorLocked && entered.length() > 0)
+        // {
+        //     lockDoor();
+        // }
+        // else
+        // {
+        //     lcdPrintHome();
+        // }
+        // entered = "";
+    }
+}
+
+void handleNumKeypress(char key)
+{
+    if (keypadMode == USER_NEW_USERNAME)
+    {
+        makeNameWithKey(key);
+        lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
+        return;
+    }
+
+    entered += key;
+    if (keypadMode == PASSWORD_CHANGE || keypadMode == USER_NEW_PASSWORD)
+    {
+        lcdPrintImportant(MSG_ENTERING_NEW_PASSWORD(entered));
+    }
+    else
+    {
+        lcdPrint("Enter Pin:", maskPassword(entered));
+    }
+    buzzShort();
+    Serial.println(entered);
+}
+
+void handleRejectKeyHold()
+{
+    if (verifyPassword(reverseString(lastEntered)))
+    {
+        nvs_reset();
+        Serial.println("Config Cleared");
+    }
+    ESP.restart();
+    Serial.println("Restarting...");
+}
+
+void handleAKeyHold()
+{
+    if (isDoorOpened && !isDoorLocked)
+    {
+        lcdPrintImportant("Enter new", "Password");
+        keypadMode = PASSWORD_CHANGE;
+        entered = "";
+    }
+}
+
+void handleBKeyHold()
+{
+    if (isDoorOpened && !isDoorLocked)
+    {
+        lcdPrintImportant("Card Options:", "(*)Remove (#)Add");
+        keypadMode = NFC_OPTIONS;
+    }
+}
+
+void handleCKeyHold()
+{
+    // probably check if user is admin
+    if (true && isUserAdmin()
+        // && isDoorOpened && !isDoorLocked
+    )
+    {
+        keypadMode = USER_OPTIONS;
+        lcdPrintImportant(MSG_SELECT_USER_ADD_DELETE);
+    }
+}
+
+void handleDKeyHold()
+{
+    toggleBacklight();
+    // if (true
+    //     // && isDoorOpened && !isDoorLocked
+    // )
+    // {
+    //     keypadMode = USER_DELETE;
+    //     String opts = "";
+
+    //     lcdPrintImportant("Select a User:  ", "(A)Next   (#)Del");
+    // }
+}
+
+void handleAKeypress()
+{
+    if (keypadMode == USER_DELETE && !isSelectedUserFirst)
+    {
+        getPreviousUser();
+        if (isSelectedUserFirst)
+        {
+            lcdPrintImportant(MSG_SELECT_USER_FIRST(selectedUser));
+        }
+        else if (isSelecteUserLast)
+        {
+            lcdPrintImportant(MSG_SELECT_USER_LAST(selectedUser));
+        }
+        else
+        {
+            lcdPrintImportant(MSG_SELECT_USER(selectedUser));
+        }
+    }
+}
+
+void handleBKeypress()
+{
+    if (keypadMode == USER_DELETE && !isSelecteUserLast)
+    {
+        getNextUser();
+        if (isSelectedUserFirst)
+        {
+            lcdPrintImportant(MSG_SELECT_USER_FIRST(selectedUser));
+        }
+        else if (isSelecteUserLast)
+        {
+            lcdPrintImportant(MSG_SELECT_USER_LAST(selectedUser));
+        }
+        else
+        {
+            lcdPrintImportant(MSG_SELECT_USER(selectedUser));
+        }
+    }
+}
+
 void keypadEventHandler(KeypadEvent key)
 {
     switch (keypad.getState())
     {
     case PRESSED:
 
-        if (key == '#')
+        switch (key)
         {
-            if (keypadMode == PASSWORD_CHANGE)
-            {
-                changeUserPassword(entered);
-                keypadMode = NORMAL;
-                entered = "";
-                lcdPrintTemporary("Password Changed", "");
-                return;
-            }
-
-            if (keypadMode == ADD_PASSWORD)
-            {
-                addUser(userId, entered);
-                keypadMode = NORMAL;
-                entered = "";
-                lcdPrintTemporary("New User", "Registered");
-                return;
-            }
-
-            if (keypadMode == NFC_OPTIONS)
-            {
-                lcdPrint("Scan new Card");
-                keypadMode = NFC_SCAN_TO_REGISTER;
-                return;
-            }
-
-            if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
-            {
-                keypadMode = NORMAL;
-                lcdPrintTemporary("", "", 1);
-                return;
-            }
-
-            if (keypadMode == ADD_USERNAME)
-            {
-                userId = enteredName;
-                keypadMode = PASSWORD_CHANGE;
-                lcdPrint("Enter new", "Password");
-                return;
-            }
-
-            // verify enterd password
-            if (verifyPassword(entered))
-            {
-                Serial.println("Password correct");
-                unlockDoor();
-                buzzSuccess();
-            }
-            else
-            {
-                Serial.println("Password incorrect");
-                lcdPrintTemporary("Wrong Password", "Try again");
-                buzzError();
-            }
-            entered = "";
-            return;
-        }
-        if (key == '*')
-        {
-            buzzShort();
-            lastEntered = entered;
-
-            if (keypadMode == PASSWORD_CHANGE)
-            {
-                keypadMode = NORMAL;
-                entered = "";
-                lcdPrintTemporary("Password Reset", "Cancelled");
-                return;
-            }
-
-            if (keypadMode == NFC_OPTIONS)
-            {
-                lcdPrint("Scan Card to", "Unregister");
-                keypadMode = NFC_SCAN_TO_DELETE;
-                return;
-            }
-
-            if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
-            {
-                keypadMode = NORMAL;
-                lcdPrintTemporary("", "", 1);
-                return;
-            }
-
-            if (keypadMode == ADD_USERNAME)
-            {
-                enteredName = enteredName.substring(0, enteredName.length() - 1);
-            }
-
-            if (!isDoorLocked && entered.length() > 0)
-            {
-                lockDoor();
-            }
-            else
-            {
-                lcdPrintTemporary("", "", 1);
-            }
-            entered = "";
-            return;
-        }
-        if (key == 'A')
-        {
-            return;
-        }
-        if (key == 'B')
-        {
-            return;
-        }
-        if (key == 'C')
-        {
+        case '#':
+            handleAcceptKeypress();
+            break;
+        case '*':
+            handleRejectKeypress();
+            break;
+        case 'A':
+            handleAKeypress();
+            break;
+        case 'B':
+            handleBKeypress();
+            break;
+        case 'C':
+            break;
+        case 'D':
             toggleBacklight();
-            return;
-        }
-        if (key == 'D')
-        {
-            return;
-        }
+            break;
 
-        if (keypadMode == ADD_USERNAME)
-        {
-            makeNameWithKey(key);
-            lcdPrint("New User Name:", enteredName);
-            return;
+        default:
+            handleNumKeypress(key);
+            break;
         }
-
-        entered += key;
-        if (keypadMode == PASSWORD_CHANGE)
-        {
-            lcdPrint((entered));
-        }
-        else
-        {
-            lcdPrint("Enter Pin:", maskPassword(entered));
-        }
-        buzzShort();
-        Serial.println(entered);
-
         break;
 
     case RELEASED:
         break;
 
     case HOLD:
-        if (key == '*')
-        {
-            if (verifyPassword(reverseString(lastEntered)))
-            {
-                nvs_reset();
-                Serial.println("Config Cleared");
-            }
-            ESP.restart();
-            Serial.println("Restarting...");
-        }
-        else if (key == 'A' && isDoorOpened && !isDoorLocked)
-        {
-            lcdPrint("Enter new", "Password");
-            keypadMode = PASSWORD_CHANGE;
-            entered = "";
-        }
-        else if (key == 'B' && isDoorOpened && !isDoorLocked)
-        {
-            lcdPrint("Card Options:", "(*)Remove (#)Add");
-            keypadMode = NFC_OPTIONS;
-        }
-        else if (key == 'C' && isDoorOpened && !isDoorLocked)
-        {
-            if (verifyPassword(reverseString(entered)))
-            {
-                Serial.printf("Tags: %s", userPrefs.getString(CONFIG_USERS));
-            }
 
-            lcdPrint("New User Name:");
+        switch (key)
+        {
+        case '*':
+            handleRejectKeyHold();
+            break;
+        case 'A':
+            handleAKeyHold();
+            break;
+        case 'B':
+            handleBKeyHold();
+            break;
+        case 'C':
+            handleCKeyHold();
+            break;
+        case 'D':
+            handleDKeyHold();
+            break;
+
+        default:
+            break;
         }
         break;
     }
+}
+
+void CheckFirstRun()
+{
+    JsonDocument userDoc = loadUsers();
+    JsonArray users = userDoc.as<JsonArray>();
+    if (users.size() != 0)
+        return;
+    keypadMode = USER_NEW_USERNAME;
+    lcdPrintImportant("New User Name:");
 }
 
 void clearPassword()
@@ -247,7 +673,7 @@ bool verifyPassword(String password)
     JsonArray users = usersDoc.as<JsonArray>();
     if (users.size() == 0 && password == "1234")
     {
-        userId = "Admin";
+        userId = "Setup";
         return true;
     }
     for (JsonObject user : users)
@@ -299,84 +725,235 @@ bool addUser(String username, String password)
     JsonObject newUser = users.add<JsonObject>();
     newUser["username"] = username;
     newUser["password"] = password;
-    newUser["tags"] = JsonArray();
+    newUser["admin"] = false;
+    newUser.createNestedArray("tags");
+    // newUser["tags"] = JsonArray();
 
     saveUsers(doc);
     return true;
 }
 
-/*----------------------------------T9 Name Entry----------------------------------------*/
-
-// Function to map a key to its corresponding letters
-String getKeyMapping(char key)
+bool removeUser(String usernameToRemove)
 {
-    switch (key)
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
+
+    bool found = false;
+
+    for (size_t i = 0; i < users.size(); i++)
     {
-    case '2':
-        return "ABC2";
-    case '3':
-        return "DEF3";
-    case '4':
-        return "GHI4";
-    case '5':
-        return "JKL5";
-    case '6':
-        return "MNO6";
-    case '7':
-        return "PQRS7";
-    case '8':
-        return "TUV8";
-    case '9':
-        return "WXYZ9";
-    case '0':
-        return " 0";
-    default:
-        return "";
+        JsonObject user = users[i];
+        if (user["username"] == usernameToRemove)
+        {
+            users.remove(i);
+            found = true;
+            break;
+        }
     }
-}
 
-void appendCurrentLetter()
-{
-    String mapping = getKeyMapping(currentKey);
-    if (mapping.length() > 0)
+    if (found)
     {
-        int index = (pressCount - 1) % mapping.length();
-        char letter = mapping.charAt(index);
-        enteredName += letter;
+        saveUsers(doc);
+        Serial.printf("User '%s' removed successfully\n", usernameToRemove.c_str());
+        return true;
     }
     else
     {
-        enteredName += currentKey;
+        Serial.printf("User '%s' not found\n", usernameToRemove.c_str());
+        return false;
     }
-    Serial.print("Current text: ");
-    Serial.println(enteredName);
+}
+
+void setUserAdmin(bool isAdmin)
+
+{
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
+
+    for (JsonObject user : users)
+    {
+        if (user["username"] == userId)
+        {
+            user["admin"] = isAdmin;
+        }
+    }
+
+    saveUsers(doc);
+}
+
+void getNextUser()
+{
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
+    selectedUserIndex++;
+    selectedUser = users[selectedUserIndex]["username"].as<String>();
+    isSelectedUserFirst = selectedUserIndex <= 0;
+    isSelecteUserLast = selectedUserIndex >= users.size();
+}
+
+void getPreviousUser()
+{
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
+    selectedUserIndex++;
+    selectedUser = users[selectedUserIndex]["username"].as<String>();
+    isSelectedUserFirst = selectedUserIndex <= 1;
+    isSelecteUserLast = selectedUserIndex >= users.size();
+}
+
+bool isUserAdmin()
+{
+    JsonDocument doc = loadUsers();
+    JsonArray users = doc.as<JsonArray>();
+
+    for (JsonObject user : users)
+    {
+        if (user["username"] == userId)
+        {
+            if (user["admin"].is<bool>() && user["admin"])
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/*----------------------------------T9 Name Entry----------------------------------------*/
+
+String inputString = "";
+char lastKey = '\0';
+int cycleIndex = 0;
+unsigned long lastPressTime = 0;
+const unsigned long timeoutDelay = 1000; // 1 second
+
+void printLiveString(char currentChar = '\0')
+{
+    enteredName = inputString;
+    if (currentChar != '\0')
+    {
+        enteredName += currentChar;
+    }
+}
+
+struct KeyMap
+{
+    char key;
+    const char *letters;
+};
+
+// Define the mapping (adjust as needed)
+KeyMap keyMappings[] = {
+    {'2', "ABC2"},
+    {'3', "DEF3"},
+    {'4', "GHI4"},
+    {'5', "JKL5"},
+    {'6', "MNO6"},
+    {'7', "PQRS7"},
+    {'8', "TUV8"},
+    {'9', "WXYZ9"},
+    {'0', " 0"}};
+
+const int numMappings = sizeof(keyMappings) / sizeof(KeyMap);
+
+void clearName()
+{
+    deleteLastChar();
+    inputString = "";
+}
+
+void deleteLastChar()
+{
+    if (lastKey != '\0')
+    {
+        lastKey = '\0';
+    }
+    else
+    {
+        if (inputString.length() > 0)
+        {
+            inputString.remove(inputString.length() - 1);
+        }
+    }
+
+    printLiveString();
 }
 
 void makeNameWithKey(char key)
 {
+    unsigned long currentTime = millis();
+
     if (key != NO_KEY)
     {
-        if (key == currentKey)
+        if (key == lastKey && (currentTime - lastPressTime < timeoutDelay))
         {
-            pressCount++;
+            // cycle through letters
+            for (int i = 0; i < numMappings; i++)
+            {
+                if (keyMappings[i].key == key)
+                {
+                    cycleIndex = (cycleIndex + 1) % strlen(keyMappings[i].letters);
+                    printLiveString(keyMappings[i].letters[cycleIndex]);
+                    break;
+                }
+            }
+            lastPressTime = currentTime;
         }
         else
         {
-            if (currentKey != '\0')
+            // confirm the previous character (if any)
+            if (lastKey != '\0')
             {
-                appendCurrentLetter();
+                for (int i = 0; i < numMappings; i++)
+                {
+                    if (keyMappings[i].key == lastKey)
+                    {
+                        inputString += keyMappings[i].letters[cycleIndex];
+                        break;
+                    }
+                }
             }
-            currentKey = key;
-            pressCount = 1;
+
+            // prepare for new key
+            lastKey = key;
+            lastPressTime = currentTime;
+            cycleIndex = 0;
+
+            // check if current key has mapping
+            bool hasMapping = false;
+            for (int i = 0; i < numMappings; i++)
+            {
+                if (keyMappings[i].key == key)
+                {
+                    printLiveString(keyMappings[i].letters[cycleIndex]);
+                    hasMapping = true;
+                    break;
+                }
+            }
+
+            // if not mapped (like 1, 0, *, #), accept immediately
+            if (!hasMapping)
+            {
+                inputString += key;
+                lastKey = '\0'; // no cycling
+                printLiveString();
+            }
         }
-        lastKeyPressTime = millis();
     }
 
-    if (currentKey != '\0' && (millis() - lastKeyPressTime > multiTapDelay))
+    // confirm character if timeout exceeded
+    if (lastKey != '\0' && (currentTime - lastPressTime > timeoutDelay))
     {
-        appendCurrentLetter();
-        currentKey = '\0';
-        pressCount = 0;
+        for (int i = 0; i < numMappings; i++)
+        {
+            if (keyMappings[i].key == lastKey)
+            {
+                inputString += keyMappings[i].letters[cycleIndex];
+                break;
+            }
+        }
+        lastKey = '\0';
+        printLiveString(); // final update after timeout
     }
 }
 

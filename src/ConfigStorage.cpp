@@ -10,6 +10,10 @@ void setupConfigStorage()
     userPrefs.begin("user");
     globalConfig.begin("global");
 
+    if (!userPrefs.isKey(CONFIG_USERS))
+    {
+        userPrefs.putString(CONFIG_USERS, "[]");
+    }
     if (!globalConfig.isKey(CONFIG_STA_ENABLE))
     {
         globalConfig.putBool(CONFIG_STA_ENABLE, DEFAULT_STA_ENABLE);
@@ -23,10 +27,16 @@ void setupConfigStorage()
     }
 
     Serial.println("Config storage initialized");
+
+    JsonDocument d = loadUsers();
+
+    Serial.printf("Users: \n");
+    serializeJsonPretty(d,Serial);
+    Serial.println("");
 }
 
 JsonDocument loadUsers() {
-    String json = userPrefs.getString("users", "[]");
+    String json = userPrefs.getString(CONFIG_USERS);
     JsonDocument doc;
     deserializeJson(doc, json);
     return doc;
@@ -35,7 +45,7 @@ JsonDocument loadUsers() {
 void saveUsers(const JsonDocument& doc) {
     String out;
     serializeJson(doc, out);
-    userPrefs.putString("users", out);
+    userPrefs.putString(CONFIG_USERS, out);
 }
 
 void nvs_reset()

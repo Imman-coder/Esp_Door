@@ -1,11 +1,11 @@
 #include "LCDDisplay.h"
 #include <LiquidCrystal_I2C.h>
 
-
 enum LCDState
 {
     LCD_IDLE,
-    LCD_TEMPORARY
+    LCD_TEMPORARY,
+    LCD_IMPORTANT
 };
 
 LCDState lcdState = LCD_IDLE;
@@ -28,14 +28,29 @@ void setupLCD()
 {
     lcd.init(LCD_SDA, LCD_SCL);
     lcd.backlight();
-    lcdPrint("Enter Pin or", "Scan NFC");
+    lcdPrintHome();
     Serial.println("LCD initialized");
 }
 
 void lcdPrint(const String &line1, const String &line2)
 {
     lcdState = LCD_IDLE;
-    lcd.clear();
+    lcdClear();
+
+    delay(5); // Allow time for the LCD to clear before printing new text
+    lcd.setCursor(0, 0);
+    lcd.print(line1.c_str());
+    if (!line2.isEmpty())
+    {
+        lcd.setCursor(0, 1);
+        lcd.print(line2.c_str());
+    }
+}
+
+void lcdPrintImportant(const String &line1, const String &line2)
+{
+    lcdState = LCD_IMPORTANT;
+    lcdClear();
     delay(5); // Allow time for the LCD to clear before printing new text
     lcd.setCursor(0, 0);
     lcd.print(line1.c_str());
@@ -49,14 +64,15 @@ void lcdPrint(const String &line1, const String &line2)
 void lcdClear()
 {
     lcd.clear();
+    // lcd.setCursor(0,0);
+    // lcd.print("                  ");
+    // lcd.setCursor(1,0);
+    // lcd.print("                  ");
 }
 
-void lcdWelcome()
+void lcdPrintHome()
 {
-    lcd.clear();
-    
-    lcd.setCursor(0, 0);
-    lcd.print("Welcome!");
+    lcdPrint(MSG_HOME);
 }
 
 void setBacklight(bool state)
@@ -79,6 +95,9 @@ void toggleBacklight()
 
 void lcdPrintTemporary(const String &line1, const String &line2, unsigned long timeout)
 {
+    if (lcdState == LCD_IMPORTANT)
+        return;
+
     lcdPrint(line1, line2);
     errorDisplayStartTime = millis();
     errorDisplayDuration = timeout;
@@ -92,7 +111,7 @@ void loopLCD()
         if (millis() - errorDisplayStartTime > errorDisplayDuration)
         {
             // lcdPromptAuthentication();
-            lcdPrint("Enter Pin or", "Scan NFC");
+            lcdPrint(MSG_HOME);
             lcdState = LCD_IDLE;
         }
     }

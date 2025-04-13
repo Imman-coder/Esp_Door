@@ -26,7 +26,7 @@ bool lastResetState = false; // Variable to store the last state of the reset pi
 long lastResetTime = 0;
 
 void removeTagFromUser(String tag);
-void addTagToUser(String tag);
+bool addTagToUser(String tag);
 bool isTagRegistered(String tag);
 
 MFRC522DriverPinSimple ss_pin(RFID_SDA);
@@ -60,7 +60,8 @@ String byteArrayToHexString(const byte *data, size_t length)
 void loopRFID()
 {
 
-    if(millis() - lastResetTime > RFID_RESET_TIME){
+    if (millis() - lastResetTime > RFID_RESET_TIME)
+    {
         lastResetTime = millis();
         rfid.PCD_Init();
     }
@@ -81,6 +82,7 @@ void loopRFID()
 
     if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
     {
+        lcdPrint("");
         if (keypadMode == NFC_SCAN_TO_DELETE)
         {
             if (isTagRegistered(uid))
@@ -88,13 +90,13 @@ void loopRFID()
                 // unregister card logic
                 removeTagFromUser(uid);
                 lcdPrintTemporary("Card UnRegistered");
-                Serial.printf("Card Unregistered: %s\n",uid);
+                Serial.printf("Card Unregistered: %s\n", uid);
             }
             else
             {
                 // Invalid card(card not registered ever)
-                Serial.printf("new not found: %s\n",uid);
-                lcdPrintTemporary("Card not ","Registered");
+                Serial.printf("new not found: %s\n", uid);
+                lcdPrintTemporary("Card not ", "Registered");
             }
         }
         else
@@ -103,17 +105,17 @@ void loopRFID()
             {
                 // register card logic
                 addTagToUser(uid);
-                Serial.printf("Registered new card: %s\n",uid);
-                lcdPrintTemporary("New Card ","Registered");
+                Serial.printf("Registered new card: %s\n", uid);
+                lcdPrintTemporary("New Card ", "Registered");
             }
             else
             {
                 // Card already registered.
-                Serial.printf("Card already registered: %s\n",uid);
+                Serial.printf("Card already registered: %s\n", uid);
                 lcdPrintTemporary("Already Registered");
             }
         }
-        
+
         keypadMode = NORMAL;
         Serial.printf("keypadMode: %s", keypadModeToString());
         return;
@@ -135,14 +137,18 @@ void loopRFID()
     }
 }
 
-bool isTagRegistered(String tag) {
+bool isTagRegistered(String tag)
+{
     JsonDocument doc = loadUsers();
     JsonArray users = doc.as<JsonArray>();
 
-    for (JsonObject user : users) {
+    for (JsonObject user : users)
+    {
         JsonArray tags = user["tags"];
-        for (String t : tags) {
-            if (t == tag) {
+        for (String t : tags)
+        {
+            if (t == tag)
+            {
                 userId = user["username"].as<String>();
                 return true;
             }
@@ -151,13 +157,31 @@ bool isTagRegistered(String tag) {
     return false;
 }
 
-
-void addTagToUser(String tag) {
+bool addTagToUser(String tag)
+{
     JsonDocument doc = loadUsers();
     JsonArray users = doc.as<JsonArray>();
 
-    for (JsonObject user : users) {
-        if (user["username"] == userId) {
+    // check if tag is not registered
+    for (JsonObject user : users)
+    {
+        JsonArray tags = user["tags"];
+        for(auto t: tags){
+            if(t.as<String>() == tag){
+                return false;
+            }
+        }
+        break;
+    }
+
+    for (JsonObject user : users)
+    {
+        if (user["username"] == userId)
+        {
+            if (!user.containsKey("tags") || !user["tags"].is<JsonArray>())
+            {
+                user.createNestedArray("tags");
+            }
             JsonArray tags = user["tags"];
             tags.add(tag);
             break;
@@ -165,17 +189,23 @@ void addTagToUser(String tag) {
     }
 
     saveUsers(doc);
+    return true;
 }
 
-void removeTagFromUser(String tag) {
+void removeTagFromUser(String tag)
+{
     JsonDocument doc = loadUsers();
     JsonArray users = doc.as<JsonArray>();
 
-    for (JsonObject user : users) {
-        if (user["username"] == userId) {
+    for (JsonObject user : users)
+    {
+        if (user["username"] == userId)
+        {
             JsonArray tags = user["tags"];
-            for (size_t i = 0; i < tags.size(); i++) {
-                if (tags[i] == tag) {
+            for (size_t i = 0; i < tags.size(); i++)
+            {
+                if (tags[i] == tag)
+                {
                     tags.remove(i);
                     break;
                 }
