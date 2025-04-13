@@ -10,6 +10,7 @@
 #include "WiFiHandler.h"
 #include "HTTPServer.h"
 #include "UnlockLogic.h"
+#include "LockdownHandler.h"
 
 void setup()
 {
@@ -24,12 +25,18 @@ void setup()
   setupBuzzer();
   setupUnlockLogic();
   Serial.println("Version 2.82");
-  
+
   CheckFirstRun();
 }
 
 void loop()
 {
+  // if lockdown mode is enabled don't take any input.
+  if (loopLockdownWithLockStatus())
+  {
+    return;
+  }
+
   loopRFID();
   loopKeypad();
   loopBuzzer();
