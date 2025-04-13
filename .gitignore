@@ -3,6 +3,9 @@
 utils/*.h
 utils/*.cmd
 
+utils/web
+data/web
+
 node_modules
 
 TODO
