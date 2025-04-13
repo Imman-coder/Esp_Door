@@ -14,6 +14,8 @@ unsigned long errorDisplayDuration = 3000;
 
 static bool backlightState = true;
 
+String lastDisplayMessage = "";
+
 // LED Display definitions
 #define LCD_ADDR 0x27
 #define LCD_SDA 4
@@ -34,6 +36,12 @@ void setupLCD()
 
 void lcdPrint(const String &line1, const String &line2)
 {
+    // if previous message is same as now then ignore.
+    if (lastDisplayMessage == line1 + line2)
+        return;
+
+    lastDisplayMessage = line1 + line2;
+
     lcdState = LCD_IDLE;
     lcdClear();
 
@@ -49,6 +57,11 @@ void lcdPrint(const String &line1, const String &line2)
 
 void lcdPrintImportant(const String &line1, const String &line2)
 {
+    // if previous message is same as now then ignore.
+    if (lastDisplayMessage == line1 + line2)
+        return;
+
+    lastDisplayMessage = line1 + line2;
     lcdState = LCD_IMPORTANT;
     lcdClear();
     delay(5); // Allow time for the LCD to clear before printing new text
@@ -95,8 +108,14 @@ void toggleBacklight()
 
 void lcdPrintTemporary(const String &line1, const String &line2, unsigned long timeout)
 {
+    // if previous message is same as now then ignore.
+    if (lastDisplayMessage == line1 + line2)
+        return;
+
     if (lcdState == LCD_IMPORTANT)
         return;
+
+    lastDisplayMessage = line1 + line2;
 
     lcdPrint(line1, line2);
     errorDisplayStartTime = millis();
