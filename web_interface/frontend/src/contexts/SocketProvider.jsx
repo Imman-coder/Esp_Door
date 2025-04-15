@@ -30,6 +30,7 @@ export function SocketProvider({ children }) {
       socket.addEventListener("close", () => {
         setSocketStatus(SocketStatus.Reconnecting);
         setTimeout(() => {
+          socket.close();
           connect();
         }, 1000);
       });
@@ -37,6 +38,7 @@ export function SocketProvider({ children }) {
       socket.addEventListener("error", () => {
         setSocketStatus(SocketStatus.Reconnecting);
         setTimeout(() => {
+          socket.close();
           connect();
         }, 1000);
       });
