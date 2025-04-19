@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Keypad.h>
+#include <ArduinoJson.h>
 
 enum SetupMode
 {
@@ -27,6 +28,10 @@ enum SetupMode
 extern SetupMode keypadMode;
 
 String keypadModeToString();
+bool getUserByPassword(String password, JsonDocument &user_ob);
+bool addUser(String username, String password, bool admin);
+bool removeUser(String usernameToRemove);
+String generateUID();
 void loopKeypad();
 void clearPassword();
 void setupKeypad();

@@ -6,18 +6,21 @@ import TopNavBarLayout from './layout/TopNavBarLayout'
 import LoginPage from './pages/LoginPage'
 import SettingsPage from './pages/SettingsPage'
 import UpdatePage from './pages/UpdatePage'
+import ProtectedRouteLayout from './layout/ProtectedRouteLayout'
 
 function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<TopNavBarLayout/>}>
-        <Route index element={<HomePage/>} />
-        <Route path='/update' element={<UpdatePage/>} />
-        <Route path='/settings' element={<SettingsPage/>} />
+      <Routes >
+        <Route path="/" element={<TopNavBarLayout />}>
+          <Route path="/" element={<ProtectedRouteLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path='/update' element={<UpdatePage />} />
+            <Route path='/settings' element={<SettingsPage />} />
+          </Route>
         </Route>
-        <Route path='/login' element={<LoginPage/>} />
+        <Route path='/login' element={<LoginPage />} />
       </Routes>
     </BrowserRouter>
   )

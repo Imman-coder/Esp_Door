@@ -166,8 +166,10 @@ bool addTagToUser(String tag)
     for (JsonObject user : users)
     {
         JsonArray tags = user["tags"];
-        for(auto t: tags){
-            if(t.as<String>() == tag){
+        for (auto t : tags)
+        {
+            if (t.as<String>() == tag)
+            {
                 return false;
             }
         }
@@ -178,7 +180,7 @@ bool addTagToUser(String tag)
     {
         if (user["username"] == userId)
         {
-            if (!user.containsKey("tags") || !user["tags"].is<JsonArray>())
+            if (!user["tags"].is<JsonArray>())
             {
                 user.createNestedArray("tags");
             }

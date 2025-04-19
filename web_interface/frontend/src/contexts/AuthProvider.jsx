@@ -14,6 +14,8 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if(auth)
       localStorage.setItem("auth", JSON.stringify(auth))
+    else
+      localStorage.removeItem("auth");
   }, [auth]);
 
   return (

@@ -22,9 +22,10 @@ void setup()
   setupWiFi();
   setupWebserver();
   startWebserver();
+  setupLockdown();
   setupBuzzer();
   setupUnlockLogic();
-  Serial.println("Version 2.82");
+  Serial.println("Version 2.102");
 
   CheckFirstRun();
 }

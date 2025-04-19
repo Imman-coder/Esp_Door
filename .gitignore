@@ -3,6 +3,7 @@
 utils/*.h
 utils/*.cmd
 
+utile/logs
 utils/web
 data/web
 

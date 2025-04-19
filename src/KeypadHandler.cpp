@@ -3,6 +3,7 @@
 #include "UnlockLogic.h"
 #include "ConfigStorage.h"
 #include "BuzzerHandler.h"
+#include "LockdownHandler.h"
 
 #include "ArduinoJson.h"
 
@@ -26,7 +27,7 @@ String enteredName = "";
 String selectedUser = "";
 
 bool isSelectedUserFirst = true;
-bool isSelecteUserLast = false;
+bool isSelectedUserLast = false;
 int selectedUserIndex = -1;
 
 void keypadEventHandler(KeypadEvent key);
@@ -35,7 +36,7 @@ bool verifyPassword(String password);
 String maskPassword(String password);
 String reverseString(String str);
 void makeNameWithKey(char key);
-bool addUser(String username, String password);
+bool addUser(String username, String password, bool admin = false);
 bool removeUser(String usernameToRemove);
 void deleteLastChar();
 void clearName();
@@ -43,6 +44,7 @@ void setUserAdmin(bool isAdmin);
 void getPreviousUser();
 void getNextUser();
 bool isUserAdmin();
+JsonDocument loadUsersFilterSelf();
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
@@ -87,9 +89,23 @@ void handleAcceptKeypress()
         break;
 
     case FIRST_ADD_USERNAME:
+        userId = enteredName;
+        clearName();
+        keypadMode = FIRST_ADD_PASSWORD;
+        lcdPrintImportant(MSG_ENTER_NEW_PASSWORD);
         break;
 
     case FIRST_ADD_PASSWORD:
+        success = addUser(userId, entered, true);
+        Serial.printf("New User: %s, %s, %s\n", userId, entered, success ? "Success" : "Failed");
+        setUserAdmin(true);
+        keypadMode = NORMAL;
+        entered = "";
+        lcdPrint("");
+        if (success)
+            lcdPrintTemporary(MSG_SUCCESS_USER_CREATE);
+        else
+            lcdPrintTemporary(MSG_FAIL_USER_CREATE);
         break;
 
     case USER_OPTIONS:
@@ -145,98 +161,11 @@ void handleAcceptKeypress()
         {
             Serial.println("Password incorrect");
             lcdPrintTemporary(MSG_INVALID_PASSWORD);
+            failAttemptMade();
             buzzError();
         }
         entered = "";
         break;
-    }
-
-    {
-
-        // if (keypadMode == PASSWORD_CHANGE)
-        // {
-        //     bool success = changeUserPassword(entered);
-        //     keypadMode = NORMAL;
-        //     entered = "";
-        //     lcdPrint("");
-        //     lcdPrintTemporary(success ? MSG_SUCCESS_PASSWORD_CHANGE : MSG_FAIL_PASSWORD_CHANGE);
-        //     return;
-        // }
-
-        // if (keypadMode == NFC_OPTIONS)
-        // {
-        //     lcdPrintImportant(MSG_SCAN_NEW_NFC);
-        //     keypadMode = NFC_SCAN_TO_REGISTER;
-        //     return;
-        // }
-
-        // if (keypadMode == USER_OPTIONS)
-        // {
-        //     keypadMode == USER_NEW_USERNAME;
-        //     lcdPrintImportant(MSG_ENTER_USERNAME);
-        //     return;
-        // }
-
-        // if (keypadMode == USER_DELETE)
-        // {
-        //     keypadMode = NORMAL;
-        //     bool success = removeUser(selectedUser);
-        //     lcdPrint("");
-        //     lcdPrintTemporary(success ? MSG_SUCCESS_USER_DELETE : MSG_FAIL_USER_DELETE);
-        //     return;
-        // }
-
-        // if (keypadMode == USER_NEW_USERNAME)
-        // {
-        //     userId = enteredName;
-        //     clearName();
-        //     keypadMode = USER_NEW_PASSWORD;
-        //     lcdPrintImportant(MSG_ENTER_NEW_PASSWORD);
-        //     return;
-        // }
-
-        // if (keypadMode == USER_NEW_PASSWORD)
-        // {
-        //     bool success = addUser(userId, entered);
-        //     Serial.printf("New User: %s, %s, %s\n", userId, entered, success ? "Success" : "Failed");
-        //     keypadMode = NORMAL;
-        //     entered = "";
-        //     lcdPrint("");
-        //     lcdPrintTemporary(success ? MSG_SUCCESS_USER_CREATE : MSG_FAIL_USER_CREATE);
-        //     return;
-        // }
-
-        // if (keypadMode == USER_ADMIN_OPTION)
-        // {
-        //     setUserAdmin(true);
-        //     keypadMode = NORMAL;
-        //     lcdPrint("");
-        //     lcdPrintHome();
-        //     return;
-        // }
-
-        // I don't need this ig.
-        // if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
-        // {
-        //     keypadMode = NORMAL;
-        //     lcdPrintHome();
-        //     return;
-        // }
-
-        // Password verification.
-        // if (verifyPassword(entered))
-        // {
-        //     Serial.println("Password correct");
-        //     unlockDoor();
-        //     buzzSuccess();
-        // }
-        // else
-        // {
-        //     Serial.println("Password incorrect");
-        //     lcdPrintTemporary(MSG_INVALID_PASSWORD);
-        //     buzzError();
-        // }
-        // entered = "";
     }
 }
 
@@ -285,7 +214,7 @@ void handleRejectKeypress()
         break;
 
     case FIRST_ADD_PASSWORD:
-        if (entered.length() == 0 && keypadMode != FIRST_ADD_PASSWORD)
+        if (entered.length() == 0)
         {
             keypadMode = FIRST_ADD_USERNAME;
             lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
@@ -299,7 +228,16 @@ void handleRejectKeypress()
 
     case USER_OPTIONS:
         keypadMode = USER_DELETE;
-        lcdPrintImportant(MSG_SELECT_USER(userId)); // implementation needed.
+        selectedUserIndex = -1;
+        if (loadUsersFilterSelf().size() == 0)
+        {
+            keypadMode = NORMAL;
+            lcdPrint("No Users To","Delete.");
+            lcdPrintTemporary("No Users To","Delete.");
+            return;
+        }
+        getNextUser();
+        lcdPrintImportant(MSG_SELECT_USER_FIRST(userId));
         break;
 
     case USER_DELETE:
@@ -354,127 +292,11 @@ void handleRejectKeypress()
         entered = "";
         break;
     }
-
-    {
-        // if (keypadMode == USER_OPTIONS)
-        // {
-        //     keypadMode = USER_DELETE;
-        //     lcdPrintImportant(MSG_SELECT_USER);
-        // }
-
-        // if (keypadMode == USER_ADMIN_OPTION)
-        // {
-        //     keypadMode = NORMAL;
-        //     lcdPrint("");
-        //     lcdPrintHome();
-        //     // msg
-        //     return;
-        // }
-
-        // if (keypadMode == USER_DELETE)
-        // {
-        //     keypadMode = NORMAL;
-        //     lcdPrint("");
-        //     lcdPrintHome();
-        //     return;
-        // }
-
-        // if (keypadMode == PASSWORD_CHANGE)
-        // {
-        //     if (entered.length() == 0)
-        //     {
-        //         keypadMode = NORMAL;
-        //         lcdPrint("");
-        //         lcdPrintTemporary(MSG_DISMISS_PASSWORD);
-        //     }
-        //     else
-        //     {
-        //         entered = entered.substring(0, entered.length() - 1);
-        //     }
-        //     return;
-        // }
-
-        // if (keypadMode == USER_NEW_PASSWORD)
-        // {
-        //     if (entered.length() == 0)
-        //     {
-        //         keypadMode = NORMAL;
-        //         lcdPrint("");
-        //     }
-        //     else
-        //     {
-        //         entered = entered.substring(0, entered.length() - 1);
-        //     }
-        //     return;
-        // }
-
-        // if (keypadMode == FIRST_ADD_PASSWORD)
-        // {
-        //     if (entered.length() == 0 && keypadMode != FIRST_ADD_PASSWORD)
-        //     {
-        //         keypadMode = NORMAL;
-        //         // Send to Username entry
-        //     }
-        //     else
-        //     {
-        //         entered = entered.substring(0, entered.length() - 1);
-        //     }
-        //     return;
-        // }
-
-        // if (keypadMode == NFC_OPTIONS)
-        // {
-        //     lcdPrintImportant(MSG_SCAN_OLD_NFC_TO_DELETE);
-        //     keypadMode = NFC_SCAN_TO_DELETE;
-        //     return;
-        // }
-
-        // if (keypadMode == NFC_SCAN_TO_DELETE || keypadMode == NFC_SCAN_TO_REGISTER)
-        // {
-        //     keypadMode = NORMAL;
-        //     lcdPrintHome();
-        //     return;
-        // }
-
-        // if (keypadMode == USER_NEW_USERNAME)
-        // {
-        //     int len = enteredName.length();
-        //     if (len == 0)
-        //     {
-        //         entered = "";
-        //         clearName();
-        //         keypadMode = NORMAL;
-        //         lcdPrintHome();
-        //         return;
-        //     }
-        //     deleteLastChar();
-        //     lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
-        //     return;
-        // }
-
-        // if (keypadMode == FIRST_ADD_USERNAME)
-        // {
-        //     int len = enteredName.length();
-        //     deleteLastChar();
-        //     lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
-        //     return;
-        // }
-
-        // if (!isDoorLocked && entered.length() > 0)
-        // {
-        //     lockDoor();
-        // }
-        // else
-        // {
-        //     lcdPrintHome();
-        // }
-        // entered = "";
-    }
 }
 
 void handleNumKeypress(char key)
 {
-    if (keypadMode == USER_NEW_USERNAME)
+    if (keypadMode == USER_NEW_USERNAME || keypadMode == FIRST_ADD_USERNAME)
     {
         makeNameWithKey(key);
         lcdPrintImportant(MSG_ENTERING_USERNAME(enteredName));
@@ -559,10 +381,6 @@ void handleAKeypress()
         {
             lcdPrintImportant(MSG_SELECT_USER_FIRST(selectedUser));
         }
-        else if (isSelecteUserLast)
-        {
-            lcdPrintImportant(MSG_SELECT_USER_LAST(selectedUser));
-        }
         else
         {
             lcdPrintImportant(MSG_SELECT_USER(selectedUser));
@@ -572,16 +390,12 @@ void handleAKeypress()
 
 void handleBKeypress()
 {
-    if (keypadMode == USER_DELETE && !isSelecteUserLast)
+    if (keypadMode == USER_DELETE && !isSelectedUserLast)
     {
         getNextUser();
-        if (isSelectedUserFirst)
+        if (isSelectedUserLast)
         {
             lcdPrintImportant(MSG_SELECT_USER_FIRST(selectedUser));
-        }
-        else if (isSelecteUserLast)
-        {
-            lcdPrintImportant(MSG_SELECT_USER_LAST(selectedUser));
         }
         else
         {
@@ -632,6 +446,10 @@ void keypadEventHandler(KeypadEvent key)
         case '*':
             handleRejectKeyHold();
             break;
+        case '#':
+            nvs_reset();
+            ESP.restart();
+            break;
         case 'A':
             handleAKeyHold();
             break;
@@ -658,7 +476,7 @@ void CheckFirstRun()
     JsonArray users = userDoc.as<JsonArray>();
     if (users.size() != 0)
         return;
-    keypadMode = USER_NEW_USERNAME;
+    keypadMode = FIRST_ADD_USERNAME;
     lcdPrintImportant("New User Name:");
 }
 
@@ -667,24 +485,37 @@ void clearPassword()
     entered = "";
 }
 
-bool verifyPassword(String password)
+bool getUserByPassword(String password, JsonDocument &user_ob)
 {
     JsonDocument usersDoc = loadUsers();
     JsonArray users = usersDoc.as<JsonArray>();
-    if (users.size() == 0 && password == "1234")
-    {
-        userId = "Setup";
-        return true;
-    }
     for (JsonObject user : users)
     {
         if (user["password"] == password)
         {
-            userId = user["username"].as<String>();
+            user_ob.set(user);
+            serializeJsonPretty(user, Serial);
+            Serial.println("");
+            serializeJsonPretty(user_ob, Serial);
+            Serial.println("------");
             return true;
         }
     }
+    return false;
+}
 
+bool verifyPassword(String password)
+{
+    JsonDocument user;
+    bool found = getUserByPassword(password, user);
+    Serial.println("\nverify:");
+    serializeJsonPretty(user, Serial);
+    Serial.println("");
+    if (found)
+    {
+        userId = user["username"].as<String>();
+        return true;
+    }
     return false;
 }
 
@@ -707,8 +538,17 @@ bool changeUserPassword(String newPassword)
 
     return false; // user not found
 }
+String generateUID() {
+    String uid = "user-";
+    const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (int i = 0; i < 8; i++) {
+        uid += charset[random(0, sizeof(charset) - 1)];
+    }
+    return uid;
+}
 
-bool addUser(String username, String password)
+
+bool addUser(String username, String password, bool admin)
 {
     JsonDocument doc = loadUsers();
     JsonArray users = doc.as<JsonArray>();
@@ -725,8 +565,10 @@ bool addUser(String username, String password)
     JsonObject newUser = users.add<JsonObject>();
     newUser["username"] = username;
     newUser["password"] = password;
-    newUser["admin"] = false;
-    newUser.createNestedArray("tags");
+    newUser["uid"] = generateUID();
+    newUser["admin"] = admin;
+    JsonArray a;
+    newUser["tags"] = a;
     // newUser["tags"] = JsonArray();
 
     saveUsers(doc);
@@ -781,24 +623,45 @@ void setUserAdmin(bool isAdmin)
     saveUsers(doc);
 }
 
-void getNextUser()
+JsonDocument loadUsersFilterSelf()
 {
     JsonDocument doc = loadUsers();
+    JsonDocument doc2;
+
+    JsonArray users = doc.as<JsonArray>();
+    JsonArray users2 = doc2.to<JsonArray>();
+
+    for (JsonObject user : users)
+    {
+        if (user["username"] != userId)
+        {
+            users2.add(user);
+        }
+    }
+
+    serializeJsonPretty(doc2, Serial);
+
+    return doc2;
+}
+
+void getNextUser()
+{
+    JsonDocument doc = loadUsersFilterSelf();
     JsonArray users = doc.as<JsonArray>();
     selectedUserIndex++;
     selectedUser = users[selectedUserIndex]["username"].as<String>();
     isSelectedUserFirst = selectedUserIndex <= 0;
-    isSelecteUserLast = selectedUserIndex >= users.size();
+    isSelectedUserLast = selectedUserIndex >= users.size() - 1;
 }
 
 void getPreviousUser()
 {
-    JsonDocument doc = loadUsers();
+    JsonDocument doc = loadUsersFilterSelf();
     JsonArray users = doc.as<JsonArray>();
-    selectedUserIndex++;
+    selectedUserIndex--;
     selectedUser = users[selectedUserIndex]["username"].as<String>();
     isSelectedUserFirst = selectedUserIndex <= 1;
-    isSelecteUserLast = selectedUserIndex >= users.size();
+    isSelectedUserLast = selectedUserIndex >= users.size();
 }
 
 bool isUserAdmin()

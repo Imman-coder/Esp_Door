@@ -2,9 +2,11 @@ import React, { useEffect } from "react";
 import { Outlet, NavLink } from "react-router-dom";
 import useSocket from "../hooks/useSocket";
 import { SocketStatus } from "../contexts/SocketProvider";
+import useAuth from "../hooks/useAuth";
 
 function TopNavBarLayout() {
   const { socketStatus } = useSocket();
+  const { auth, setAuth } = useAuth();
 
   useEffect(() => {
     console.log(socketStatus);
@@ -38,13 +40,13 @@ function TopNavBarLayout() {
             </li>
             <li>
               <details>
-                <summary>Parent</summary>
-                <ul className="bg-base-100 rounded-t-none p-2">
-                  <li>
+                <summary>{auth?.username || "User"}</summary>
+                <ul className="bg-base-100 rounded-t-none p-2 z-10">
+                  {/* <li>
                     <a>Link 1</a>
-                  </li>
+                  </li> */}
                   <li>
-                    <a>Logout</a>
+                    <a onClick={()=>{setAuth()}} >Logout</a>
                   </li>
                 </ul>
               </details>

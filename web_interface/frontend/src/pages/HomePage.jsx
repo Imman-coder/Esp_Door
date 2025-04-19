@@ -8,11 +8,11 @@ function HomePage() {
   const { socket, socketStatus } = useSocket();
 
   const lockDoor = () => {
-    socket.send(JSON.stringify({ action: "lock_door", action_type: "door" }));
+    socket.send(JSON.stringify({ type: "command", action_type: "lock" }));
   };
 
   const unlockDoor = () => {
-    socket.send(JSON.stringify({ action: "unlock_door", action_type: "door" }));
+    socket.send(JSON.stringify({ type: "command", action_type: "unlock" }));
   };
 
   /**
@@ -24,11 +24,10 @@ function HomePage() {
    */
   const handleSocketMessages = (event) => {
     const data = JSON.parse(event.data);
-    console.log("Received data:", data);
-    if (data.action === "door_state") {
-      setDoorOpened(data.state === "opened");
-    } else if (data.action === "lock_state") {
-      setLockOpened(data.state === "unlocked");
+    console.log("Received data:", data);  
+    if (data.type === "status_update") {
+      setDoorOpened(data.door_status === "closed");
+      setLockOpened(data.lock_status === "unlocked")
     }
   };
 
@@ -37,7 +36,7 @@ function HomePage() {
 
     socket.addEventListener("message", handleSocketMessages);
 
-    socket.send(JSON.stringify({ action: "refresh", action_type: "door" }));
+    socket.send(JSON.stringify({ type: "get_status" }));
 
     return () => {
       socket.removeEventListener("message", handleSocketMessages);
@@ -49,13 +48,13 @@ function HomePage() {
       <span>
         Lock State:
         <span className={!isLockOpened ? "text-green-400" : "text-red-700"}>
-          {isLockOpened ? "Unlocked" : "Locked"}
+          {isLockOpened === undefined ? "   -" :(isLockOpened ? " Unlocked" : " Locked")}
         </span>
       </span>
       <span>
         Door State:
         <span className={!isDoorOpened ? "text-green-400" : "text-red-700"}>
-          {isDoorOpened ? "Opened" : "Closed"}
+          { isDoorOpened === undefined ? "  -" : (isDoorOpened ? " Opened" : " Closed")}
         </span>
       </span>
       {isLockOpened ? (

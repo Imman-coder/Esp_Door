@@ -6,29 +6,42 @@ function SettingsPage() {
   const { socket, socketStatus } = useSocket();
 
   const [settingsJson, setSettingsJson] = useState();
+  const [selectedUserId, setSelectedUserId] = useState(0);
 
   const handleSocketMessages = (event) => {
     const data = JSON.parse(event.data);
     console.log("Received data:", data);
-    if (data.type === "settings") {
+    if (data.type === "settings_update") {
       setSettingsJson(data.data);
     }
   };
 
-  // useEffect(() => {
-  //   console.log(settingsJson);
-  // }, [settingsJson]);
+  useEffect(() => {
+    console.log(settingsJson);
+  }, [settingsJson]);
 
   let handleSave = () => {
     console.log("Saving settings...");
+    console.log({
+        type: "save_settings",
+        data: settingsJson,
+      })
     socket.send(
       JSON.stringify({
-        action: "update_settings",
-        action_type: "settings",
+        type: "save_settings",
         data: settingsJson,
       })
     );
   };
+
+  const remDup = (u) => {
+
+    u = Array.from(
+      new Map(u.map(user => [user.username, user])).values()
+    );
+
+    return u;
+  }
 
   useEffect(() => {
     if (!socket || socketStatus != SocketStatus.Connected) return;
@@ -36,7 +49,7 @@ function SettingsPage() {
     socket.addEventListener("message", handleSocketMessages);
 
     socket.send(
-      JSON.stringify({ action: "get_settings", action_type: "settings" })
+      JSON.stringify({ type: "get_settings" })
     );
 
     return () => {
@@ -47,208 +60,256 @@ function SettingsPage() {
   return settingsJson ? (
     <>
       <div className="p-6 w-full">
-        <div className="card bg-base-200 shadow-sm">
-          <div className="card-body">
-            <h2 className="card-title">Wifi Settings</h2>
-            <div className="grid grid-cols-2 gap-y-4 items-center mt-4">
-              <span>Access Point Mode</span>
-              <input
-                type="checkbox"
-                checked={settingsJson.settings.ap_enable}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                      ...prev.settings,
-                      ap_enable: e.target.checked,
-                    },
-                  }));
-                }}
-                className="checkbox checkbox-lg"
-              />
-              <span>Access Point SSID</span>
-              <input
-                type="text"
-                placeholder="Type here"
-                className="input w-full"
-                value={settingsJson.settings.ap_ssid}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                      ...prev.settings,
-                      ap_ssid: e.target.value,
-                    },
-                  }));
-                }}
-              />
-              <span>Access Poing Password</span>
-              <input
-                type="text"
-                placeholder="Type here"
-                className="input w-full"
-                value={settingsJson.settings.ap_password}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                      ...prev.settings,
-                      ap_password: e.target.value,
-                    },
-                  }));
-                }}
-              />
-              <span>Station Mode</span>
-              <input
-                type="checkbox"
-                className="checkbox checkbox-lg"
-                checked={settingsJson.settings.sta_enable}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                      ...prev.settings,
-                      sta_enable: e.target.checked,
-                    },
-                  }));
-                }}
-              />
-              <span>Station Mode SSID</span>
-              <input
-                type="text"
-                placeholder="Type here"
-                className="input w-full"
-                value={settingsJson.settings.sta_ssid}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                      ...prev.settings,
-                      sta_ssid: e.target.value,
-                    },
-                  }));
-                }}
-              />
-              <span>Station Mode Password</span>
-              <input
-                type="text"
-                placeholder="Type here"
-                className="input w-full"
-                value={settingsJson.settings.sta_password}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                      ...prev.settings,
-                      sta_password: e.target.value,
-                    },
-                  }));
-                }}
-              />
+        {settingsJson.wifi &&
+          <div className="card bg-base-200 shadow-sm">
+            <div className="card-body">
+              <h2 className="card-title">Wifi Settings</h2>
+              <div className="grid grid-cols-2 gap-y-4 items-center mt-4">
+                <span>Access Point Mode</span>
+                <input
+                  type="checkbox"
+                  checked={settingsJson.wifi.ap_enable}
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      wifi: {
+                        ...prev.wifi,
+                        ap_enable: e.target.checked,
+                      },
+                    }));
+                  }}
+                  className="checkbox checkbox-lg"
+                />
+                <span>Access Point SSID</span>
+                <input
+                  type="text"
+                  placeholder="Type here"
+                  className="input w-full"
+                  value={settingsJson.wifi.ap_ssid}
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      wifi: {
+                        ...prev.wifi,
+                        ap_ssid: e.target.value,
+                      },
+                    }));
+                  }}
+                />
+                <span>Access Poing Password</span>
+                <input
+                  type="text"
+                  placeholder="Type here"
+                  className="input w-full"
+                  value={settingsJson.wifi.ap_pass}
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      wifi: {
+                        ...prev.wifi,
+                        ap_password: e.target.value,
+                      },
+                    }));
+                  }}
+                />
+                <span>Station Mode</span>
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-lg"
+                  checked={settingsJson.wifi.sta_enable}
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      wifi: {
+                        ...prev.wifi,
+                        sta_enable: e.target.checked,
+                      },
+                    }));
+                  }}
+                />
+                <span>Station Mode SSID</span>
+                <input
+                  type="text"
+                  placeholder="Type here"
+                  className="input w-full"
+                  value={settingsJson.wifi.sta_ssid}
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      wifi: {
+                        ...prev.wifi,
+                        sta_ssid: e.target.value,
+                      },
+                    }));
+                  }}
+                />
+                <span>Station Mode Password</span>
+                <input
+                  type="text"
+                  placeholder="Type here"
+                  className="input w-full"
+                  value={settingsJson.wifi.sta_pass}
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      wifi: {
+                        ...prev.wifi,
+                        sta_password: e.target.value,
+                      },
+                    }));
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="card bg-base-200 shadow-sm mt-6">
-          <div className="card-body">
-            <h2 className="card-title">Pin Settings</h2>
-            <div className="grid grid-cols-2 gap-y-4 items-center mt-4">
-              <span>Master Pin</span>
-              <input
-                type="text"
-                placeholder="Type here"
-                className="input w-full"
-                value={settingsJson.user.pin}
+        }
+        {settingsJson.users &&
+          <div className="card bg-base-200 shadow-sm mt-6">
+            <div className="card-body">
+              <h2 className="card-title">Manage User</h2>
+              <select
+                className="select"
                 onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    user: {
-                      ...prev.user,
-                      pin: e.target.value,
-                    },
-                  }));
+                  let sid = e.target.selectedIndex;
+                  if (sid > settingsJson.users.length)
+                    settingsJson.users.push({ username: "", new_user: true, pin: "", num_tags: 0, admin: false })
+                  setSelectedUserId(sid);
                 }}
-              />
-              <span>Enable NFC</span>
-              <input
-                type="checkbox"
-                className="checkbox checkbox-lg"
-                checked={settingsJson.user.enable_nfc}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    user: {
-                      ...prev.user,
-                      enable_nfc: e.target.checked,
-                    },
-                  }));
-                }}
-              />
-              <span>Registered NFC</span>
-              <input
-                type="text"
-                value={settingsJson.user.nfc?.length}
-                disabled 
-                className="input"
-              />
+                value={selectedUserId == 0 ? "Select a user" : settingsJson.users[selectedUserId - 1].username}
+              // defaultValue="Select a user"
+              >
+                <option disabled={true} >Select a user</option>
+                {settingsJson && settingsJson.users.map(user =>
+                  <option key={user.username} value={user.username}>{user.username} {user.delete && "(Delete)"}</option>
+                )}
+                <option value="Add new"> Add new </option>
+              </select>
+              <div className="grid grid-cols-2 gap-y-4 items-center mt-4">
+
+                {selectedUserId != 0 && <>
+                  <span>Username</span>
+                  <input
+                    type="text"
+                    placeholder="Type here"
+                    className="input w-full"
+                    value={settingsJson.users[selectedUserId - 1].username}
+                    onChange={(e) => {
+                      let u = settingsJson.users[selectedUserId - 1]
+                      u.username = e.target.value;
+
+                      setSettingsJson((prev) => ({
+                        ...prev,
+                      }));
+                    }}
+                  />
+                  <span>Pin</span>
+                  <input
+                    type="text"
+                    placeholder="Type here"
+                    className="input w-full"
+                    value={settingsJson.users[selectedUserId - 1].pin}
+                    onChange={(e) => {
+                      let u = settingsJson.users[selectedUserId - 1]
+                      u.pin = e.target.value;
+                      setSettingsJson((prev) => ({
+                        ...prev,
+                      }));
+                    }}
+                  />
+                  <span>Admin</span>
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-lg"
+                    checked={settingsJson.users[selectedUserId - 1].admin || false}
+                    onChange={(e) => {
+                      settingsJson.users[selectedUserId - 1].admin = e.target.checked
+                      setSettingsJson((prev) => ({
+                        ...prev
+                      }));
+                    }}
+                  />
+                  <span>Registered NFC</span>
+                  <input
+                    type="text"
+                    value={settingsJson.users[selectedUserId - 1].num_tags}
+                    disabled
+                    className="input"
+                  />
+                </>}
+              </div>
+              {
+                selectedUserId != 0 && <>
+                  <div
+                    onClick={() => {
+                      settingsJson.users[selectedUserId - 1].delete = !settingsJson.users[selectedUserId - 1].delete;
+                      setSettingsJson((p) => ({ ...p }));
+                    }}
+                    className="btn btn-error mr-4 mt-4 text-white"
+                  >
+                    {settingsJson.users[selectedUserId - 1].delete && "Cancel "}Delete user
+                  </div>
+                </>
+              }
             </div>
-            <div className="btn btn-primary mt-4">Register NFC</div>
           </div>
-        </div>
-        <div className="card bg-base-200 shadow-sm mt-6">
-          <div className="card-body">
-            <h2 className="card-title">Lockdown Preferences</h2>
-            <div className="grid grid-cols-2 gap-y-4 items-center mt-4">
-              <span>Enable Lockdown Mode</span>
-              <input
-                type="checkbox"
-                className="checkbox checkbox-lg"
-                checked={settingsJson.settings.lockdown_enable}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                      ...prev.settings,
-                      lockdown_enable: e.target.checked,
-                    }
-                  }));
-                }}
-              />
-              <span>Max Attempt</span>
-              <input
-                type="number"
-                value={settingsJson.settings.max_attempts}
-                placeholder="3"
-                className="input w-full"
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                    ...prev.settings,
-                    max_attempts: e.target.value,
-                  }
-                  }));
-                }}
-              />
-              <span>Lockdown Time (in minutes)</span>
-              <input
-                type="number"
-                placeholder="3"
-                className="input w-full"
-                value={settingsJson.settings.lockdown_duration}
-                onChange={(e) => {
-                  setSettingsJson((prev) => ({
-                    ...prev,
-                    settings: {
-                      ...prev.settings,
-                      lockdown_duration: e.target.value,
-                    },
-                  }));
-                }}
-              />
+        }
+        {settingsJson.lockdown &&
+          <div className="card bg-base-200 shadow-sm mt-6">
+            <div className="card-body">
+              <h2 className="card-title">Lockdown Preferences</h2>
+              <div className="grid grid-cols-2 gap-y-4 items-center mt-4">
+                <span>Enable Lockdown Mode</span>
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-lg"
+                  checked={settingsJson.lockdown.enable}
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      lockdown: {
+                        ...prev.lockdown,
+                        enable: e.target.checked,
+                      }
+                    }));
+                  }}
+                />
+                <span>Max Attempt</span>
+                <input
+                  type="number"
+                  value={settingsJson.lockdown.max_attempts}
+                  placeholder="3"
+                  className="input w-full"
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      lockdown: {
+                        ...prev.lockdown,
+                        max_attempts: e.target.value,
+                      }
+                    }));
+                  }}
+                />
+                <span>Lockdown Time (in minutes)</span>
+                <input
+                  type="number"
+                  placeholder="3"
+                  className="input w-full"
+                  value={settingsJson.lockdown.duration}
+                  onChange={(e) => {
+                    setSettingsJson((prev) => ({
+                      ...prev,
+                      lockdown: {
+                        ...prev.lockdown,
+                        duration: e.target.value,
+                      },
+                    }));
+                  }}
+                />
+              </div>
+              {/* <div className="btn btn-neutral">Cancel Lockdown</div> */}
             </div>
-            <div className="btn btn-neutral">Cancel Lockdown</div>
           </div>
-        </div>
+        }
         <div onClick={handleSave} className={`btn btn-primary mt-6 card`}>
           Save
         </div>

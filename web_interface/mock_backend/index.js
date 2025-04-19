@@ -20,11 +20,54 @@ app.use(express.urlencoded({ extended: true }));
 
 const actionHandler = (msg) => {
   console.log("Action received:", msg);
-  // Handle the action here
-  if (msg.action_type == "door") {
-    handleDoorMechanism(msg.action);
-  } else if(msg.action_type == "settings") {
-    handleSettings(msg);
+  if (msg["type"] == "get_status") {
+    wss.clients.forEach((client) => {
+      client.send(
+        JSON.stringify({
+          type: "status_update",
+          lockStatus: "unlocked",
+          doorStatus: "closed",
+          currentUser: "John Doe",
+        })
+      );
+    });
+  } else if (msg["type"] == "get_settings") {
+    wss.clients.forEach((client) => {
+      client.send(
+        JSON.stringify({
+          type: "settings_update",
+          data: {
+            wifi: {
+              ap_enable: true,
+              ap_ssid: "aaaaa",
+              ap_pass: "aaaaa",
+              sta_enable: true,
+              sta_ssid: "aaaaa",
+              sta_pass: "aaaaa",
+            },
+            lockdown: {
+              enable: true,
+              max_attempts: 3,
+              duration: 5,
+            },
+            users: [
+              {
+                username: "i1",
+                pin: "332",
+                num_tags: 0,
+                // admin: false,
+              },
+              {
+                username: "i2",
+                pin:"1255",
+                num_tags: 2,
+                admin: false,
+              },
+            ],
+          },
+        })
+      );
+    });
   }
 };
 

@@ -10,10 +10,10 @@ export const SocketStatus = {
 };
 
 export function SocketProvider({ children }) {
-  let socketUrl = 
-                import.meta.env.VITE_SOCKET_URL || 
-                ("ws://" + window.location.host +"/ws");
-                console.log(socketUrl)
+  let socketUrl =
+    import.meta.env.VITE_SOCKET_URL ||
+    ("ws://" + window.location.host + "/ws");
+  console.log(socketUrl)
   const { auth } = useAuth();
 
   const [socket, setSocket] = useState();
@@ -25,6 +25,7 @@ export function SocketProvider({ children }) {
 
       socket.addEventListener("open", () => {
         setSocketStatus(SocketStatus.Connected);
+        socket.send(JSON.stringify({ type: "auth", username: auth.username, password: auth.password }))
       });
 
       socket.addEventListener("close", () => {
@@ -64,7 +65,7 @@ export function SocketProvider({ children }) {
   }, [auth]);
 
   return (
-    <SocketContext.Provider value={{socket, socketStatus}}>
+    <SocketContext.Provider value={{ socket, socketStatus }}>
       {children}
     </SocketContext.Provider>
   );
